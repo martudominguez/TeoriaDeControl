@@ -1,5 +1,6 @@
 import streamlit as st
 import numpy as np
+import pandas as pd
 from results_handler import create_temperature_plot, save_simulation_results
 from disturbance_handler import generate_random_disturbance_with_params
 import matplotlib.pyplot as plt
@@ -200,6 +201,37 @@ def run_custom_simulation(params):
         'minuto_falla': minuto_falla
     }
 
+def show_simulation_results(temperature_history, time_points, target, corte_por_falla, minuto_falla, modo):
+    save_simulation_results(temperature_history, time_points, target, len(time_points)-1)
+    simulation_data = pd.DataFrame({'Time (min)': time_points, 'Temperature (°C)': temperature_history})
+    fig = create_temperature_plot(simulation_data, target)
+    st.session_state.last_fig = fig
+    st.session_state.sim_done = True
+    st.pyplot(fig)
+    if corte_por_falla:
+        if modo == 'Aleatorio':
+            st.error(f'Falla: Se detectó una perturbación aleatoria con duración mayor a 3 minutos en el minuto {minuto_falla}. Ejecución abortada.')
+        else:
+            st.error(f'Falla: Se detectó una perturbación con duración mayor a 3 minutos en el minuto {minuto_falla}. Ejecución abortada.')
+    else:
+        st.success('¡Simulación finalizada! Los resultados se guardaron en la carpeta simulation_results.')
+    if st.button('Nueva simulación'):
+        reset_simulation()
+
+def validate_parameters(mode, min_temp, max_temp, target, initial):
+    if mode == 'Aleatorio' and min_temp > max_temp:
+        st.error('La perturbación mínima no puede ser mayor que la máxima.')
+        return False
+    if not (17 <= target <= 30 and 17 <= initial <= 30):
+        st.error('Las temperaturas deben estar entre 17 y 30 °C.')
+        return False
+    return True
+
+def reset_simulation():
+    st.session_state.sim_done = False
+    st.session_state.last_fig = None
+    st.rerun()
+
 if not st.session_state.sim_done:
     params = get_simulation_parameters_ui()
     mode = params['mode']
@@ -216,61 +248,21 @@ if not st.session_state.sim_done:
 
     if submitted:
         if mode == 'Aleatorio':
-            if min_temp > max_temp:
-                st.error('La perturbación mínima no puede ser mayor que la máxima.')
-            elif not (17 <= target <= 30 and 17 <= initial <= 30):
-                st.error('Las temperaturas deben estar entre 17 y 30 °C.')
+            if not validate_parameters(mode, min_temp, max_temp, target, initial):
+                pass
             else:
                 st.success('Simulación en curso...')
                 sim_result = run_random_simulation(params)
-                temperature_history = sim_result['temperature_history']
-                time_points = sim_result['time_points']
-                corte_por_falla = sim_result['corte_por_falla']
-                minuto_falla = sim_result['minuto_falla']
-                save_simulation_results(temperature_history, time_points, target, len(time_points)-1)
-                import pandas as pd
-                simulation_data = pd.DataFrame({'Time (min)': time_points, 'Temperature (°C)': temperature_history})
-                fig = create_temperature_plot(simulation_data, target)
-                st.session_state.last_fig = fig
-                st.session_state.sim_done = True
-                st.pyplot(fig)
-                if corte_por_falla:
-                    st.error(f'Falla: Se detectó una perturbación aleatoria con duración mayor a 3 minutos en el minuto {minuto_falla}. Ejecución abortada.')
-                else:
-                    st.success('¡Simulación finalizada! Los resultados se guardaron en la carpeta simulation_results.')
-                if st.button('Nueva simulación'):
-                    st.session_state.sim_done = False
-                    st.session_state.last_fig = None
-                    st.rerun()
+                show_simulation_results(sim_result['temperature_history'], sim_result['time_points'], target, sim_result['corte_por_falla'], sim_result['minuto_falla'], mode)
         else:
-            if not (17 <= target <= 30 and 17 <= initial <= 30):
-                st.error('Las temperaturas deben estar entre 17 y 30 °C.')
+            if not validate_parameters(mode, min_temp, max_temp, target, initial):
+                pass
             else:
                 st.success('Simulación en curso...')
                 sim_result = run_custom_simulation(params)
-                temperature_history = sim_result['temperature_history']
-                time_points = sim_result['time_points']
-                corte_por_falla = sim_result['corte_por_falla']
-                minuto_falla = sim_result['minuto_falla']
-                save_simulation_results(temperature_history, time_points, target, len(time_points)-1)
-                import pandas as pd
-                simulation_data = pd.DataFrame({'Time (min)': time_points, 'Temperature (°C)': temperature_history})
-                fig = create_temperature_plot(simulation_data, target)
-                st.session_state.last_fig = fig
-                st.session_state.sim_done = True
-                st.pyplot(fig)
-                if corte_por_falla:
-                    st.error(f'Falla: Se detectó una perturbación con duración mayor a 3 minutos en el minuto {minuto_falla}. Ejecución abortada.')
-                else:
-                    st.success('¡Simulación finalizada! Los resultados se guardaron en la carpeta simulation_results.')
-                if st.button('Nueva simulación'):
-                    st.session_state.sim_done = False
-                    st.session_state.last_fig = None
-                    st.rerun()
+                show_simulation_results(sim_result['temperature_history'], sim_result['time_points'], target, sim_result['corte_por_falla'], sim_result['minuto_falla'], mode)
 else:
     st.pyplot(st.session_state.last_fig)
     st.success('¡Simulación finalizada! Los resultados se guardaron en la carpeta simulation_results.')
     if st.button('Nueva simulación'):
-        st.session_state.sim_done = False
-        st.session_state.last_fig = None
-        st.rerun() 
+        reset_simulation() 
