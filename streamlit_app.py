@@ -16,7 +16,7 @@ if 'sim_done' not in st.session_state:
 if 'last_fig' not in st.session_state:
     st.session_state.last_fig = None
 
-def run_random_simulation(params):
+def init_random_simulation_state(params):
     min_temp = params['min_temp']
     max_temp = params['max_temp']
     prob = params['prob']
@@ -24,88 +24,101 @@ def run_random_simulation(params):
     duration = params['duration']
     target = params['target']
     initial = params['initial']
-    # Definir rango de duración según permitir_fallas
     if permitir_fallas:
         duracion_min = 1
         duracion_max = 6
     else:
         duracion_min = 1
         duracion_max = 3
-    hysteresis = 0.5
-    cooling_power = 0.2
-    current_temperature = initial
-    temperature_history = [current_temperature]
-    time_points = [0]
-    duration_int = int(duration)
-    perturbacion_activa = False
-    duracion_restante = 0
-    intensidad_perturbacion = 0.0
-    minutos_en_perturbacion_larga = 0
-    corte_por_falla = False
-    minuto_falla = None
-    duracion_perturbacion_actual = 0
-    temperatura_meseta = None
-    for current_time in range(1, duration_int + 1):
-        if perturbacion_activa:
-            current_temperature = temperatura_meseta
-            duracion_restante -= 1
-            if duracion_perturbacion_actual > 3:
-                minutos_en_perturbacion_larga += 1
-                if minutos_en_perturbacion_larga >= 3:
-                    corte_por_falla = True
-                    minuto_falla = current_time
+    return {
+        'min_temp': min_temp,
+        'max_temp': max_temp,
+        'prob': prob,
+        'permitir_fallas': permitir_fallas,
+        'duration': duration,
+        'target': target,
+        'initial': initial,
+        'duracion_min': duracion_min,
+        'duracion_max': duracion_max,
+        'hysteresis': 0.5,
+        'cooling_power': 0.2,
+        'current_temperature': initial,
+        'temperature_history': [initial],
+        'time_points': [0],
+        'duration_int': int(duration),
+        'perturbacion_activa': False,
+        'duracion_restante': 0,
+        'intensidad_perturbacion': 0.0,
+        'minutos_en_perturbacion_larga': 0,
+        'corte_por_falla': False,
+        'minuto_falla': None,
+        'duracion_perturbacion_actual': 0,
+        'temperatura_meseta': None
+    }
+
+def run_random_simulation(params):
+    state = init_random_simulation_state(params)
+    for current_time in range(1, state['duration_int'] + 1):
+        if state['perturbacion_activa']:
+            state['current_temperature'] = state['temperatura_meseta']
+            state['duracion_restante'] -= 1
+            if state['duracion_perturbacion_actual'] > 3:
+                state['minutos_en_perturbacion_larga'] += 1
+                if state['minutos_en_perturbacion_larga'] >= 3:
+                    state['corte_por_falla'] = True
+                    state['minuto_falla'] = current_time
                     break
             else:
-                minutos_en_perturbacion_larga = 0
+                state['minutos_en_perturbacion_larga'] = 0
             compressor_on = False
-            temperature_history.append(current_temperature)
-            time_points.append(current_time)
-            if duracion_restante == 0:
-                perturbacion_activa = False
-                minutos_en_perturbacion_larga = 0
-                temperatura_meseta = None
+            state['temperature_history'].append(state['current_temperature'])
+            state['time_points'].append(current_time)
+            if state['duracion_restante'] == 0:
+                state['perturbacion_activa'] = False
+                state['minutos_en_perturbacion_larga'] = 0
+                state['temperatura_meseta'] = None
             continue
         # Si no hay perturbación activa, puede generarse una nueva
-        disturbance = generate_random_disturbance_with_params({'probability': prob, 'min_temp': min_temp, 'max_temp': max_temp})
+        disturbance = generate_random_disturbance_with_params({'probability': state['prob'], 'min_temp': state['min_temp'], 'max_temp': state['max_temp']})
         if disturbance is not None:
             # Definir duración aleatoria según el rango
-            duracion = random.randint(duracion_min, duracion_max)
-            perturbacion_activa = True
-            duracion_restante = duracion
-            duracion_perturbacion_actual = duracion
-            intensidad_perturbacion = disturbance
-            temperatura_meseta = current_temperature + intensidad_perturbacion
-            minutos_en_perturbacion_larga = 1 if duracion > 3 else 0
-            current_temperature = temperatura_meseta
+            duracion = random.randint(state['duracion_min'], state['duracion_max'])
+            state['perturbacion_activa'] = True
+            state['duracion_restante'] = duracion
+            state['duracion_perturbacion_actual'] = duracion
+            state['intensidad_perturbacion'] = disturbance
+            state['temperatura_meseta'] = state['current_temperature'] + state['intensidad_perturbacion']
+            state['minutos_en_perturbacion_larga'] = 1 if duracion > 3 else 0
+            state['current_temperature'] = state['temperatura_meseta']
             compressor_on = False
-            temperature_history.append(current_temperature)
-            time_points.append(current_time)
-            if duracion > 3 and minutos_en_perturbacion_larga >= 3:
-                corte_por_falla = True
-                minuto_falla = current_time
+            state['temperature_history'].append(state['current_temperature'])
+            state['time_points'].append(current_time)
+            if duracion > 3 and state['minutos_en_perturbacion_larga'] >= 3:
+                state['corte_por_falla'] = True
+                state['minuto_falla'] = current_time
                 break
-            duracion_restante -= 1
-            if duracion_restante == 0:
-                perturbacion_activa = False
-                minutos_en_perturbacion_larga = 0
-                temperatura_meseta = None
+            state['duracion_restante'] -= 1
+            if state['duracion_restante'] == 0:
+                state['perturbacion_activa'] = False
+                state['minutos_en_perturbacion_larga'] = 0
+                state['temperatura_meseta'] = None
             continue
         # Si no hay perturbación, control normal
         if current_time == 1:
             compressor_on = False
-        if not compressor_on and current_temperature >= target + hysteresis:
+        if not compressor_on and state['current_temperature'] >= state['target'] + state['hysteresis']:
             compressor_on = True
-        elif compressor_on and current_temperature <= target - hysteresis:
+        elif compressor_on and state['current_temperature'] <= state['target'] - state['hysteresis']:
             compressor_on = False
         if compressor_on:
-            current_temperature -= cooling_power
-        temperature_history.append(current_temperature)
-        time_points.append(current_time)
+            state['current_temperature'] -= state['cooling_power']
+        state['temperature_history'].append(state['current_temperature'])
+        state['time_points'].append(current_time)
     return {
-        'temperature_history': temperature_history,
-        'time_points': time_points,
-        'corte_por_falla': corte_por_falla,
-        'minuto_falla': minuto_falla
+        'temperature_history': state['temperature_history'],
+        'time_points': state['time_points'],
+        'corte_por_falla': state['corte_por_falla'],
+        'minuto_falla': state['minuto_falla']
     }
 
 def run_custom_simulation(params):
