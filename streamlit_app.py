@@ -26,8 +26,6 @@ if not st.session_state.sim_done:
         if mode == 'Aleatorio':
             prob = st.number_input('Probabilidad de perturbación (0-1)', min_value=0.0, max_value=1.0, value=0.005, step=0.001, format='%.3f', key='prob')
             min_temp = st.number_input('Perturbación mínima (°C)', min_value=0.0, max_value=10.0, value=0.6, step=0.1, key='min_temp')
-        else:
-            num_events = st.number_input('Cantidad de perturbaciones', min_value=1, max_value=20, value=1, step=1, key='num_events')
     with col2:
         target = st.slider('Temperatura objetivo (°C)', 17.0, 30.0, 22.0, 0.1, key='target')
         initial = st.slider('Temperatura inicial (°C)', 17.0, 30.0, 26.0, 0.1, key='initial')
@@ -40,7 +38,7 @@ if not st.session_state.sim_done:
         st.markdown('---')
         st.markdown('#### Configuración de perturbaciones personalizadas')
         with st.form('event_control_form', clear_on_submit=True):
-            cols_btn = st.columns([1, 1, 6])
+            cols_btn = st.columns([1, 1])
             add = cols_btn[0].form_submit_button('Agregar perturbación')
             remove = cols_btn[1].form_submit_button('Quitar última')
             if add:
