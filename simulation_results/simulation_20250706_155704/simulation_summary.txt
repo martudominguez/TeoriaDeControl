@@ -1,0 +1,14 @@
+Final room temperature: 23.40 °C
+Simulation duration: 73 minutes
+Target temperature: 22.0 °C
+
+Simulation statistics:
+       Time (min)  Temperature (°C)
+count   74.000000         74.000000
+mean    36.500000         22.118919
+std     21.505813          0.973016
+min      0.000000         21.400000
+25%     18.250000         21.400000
+50%     36.500000         21.400000
+75%     54.750000         22.950000
+max     73.000000         24.400000
