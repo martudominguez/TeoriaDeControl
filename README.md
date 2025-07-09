@@ -9,7 +9,7 @@ Esta aplicación permite simular el control de temperatura de un sistema, consid
   - **Personalizado:** El usuario puede definir eventos de perturbación específicos (inicio, duración e intensidad).
 
 - **Control de temperatura:**
-  El sistema simula un controlador que enciende o apaga un compresor para mantener la temperatura cerca de un valor objetivo, aplicando una lógica de histéresis.
+  El sistema simula un controlador que enciende o apaga un compresor para mantener la temperatura cerca de un valor objetivo, aplicando una lógica de histéresis. **El aire acondicionado solo enfría (no puede calentar)** y el control es proporcional de tipo **on/off** (el compresor está completamente encendido o apagado, sin estados intermedios).
 
 - **Resultados:**
   Al finalizar la simulación, se muestra un gráfico de la evolución de la temperatura y se informa si hubo una falla (por ejemplo, una perturbación demasiado larga). Los resultados se guardan automáticamente en la carpeta `simulation_results`.
