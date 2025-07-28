@@ -1,6 +1,9 @@
+# plotting_handler.py
+
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
+from matplotlib.ticker import MultipleLocator # <--- 1. IMPORTAR LA HERRAMIENTA NECESARIA
 
 def create_and_save_plots(simulation_data: pd.DataFrame, params: dict, simulation_dir: str):
     """
@@ -18,6 +21,7 @@ def create_and_save_plots(simulation_data: pd.DataFrame, params: dict, simulatio
     axs[0].set_title('Señal de Perturbación')
     axs[0].grid(True)
     axs[0].legend()
+    axs[0].yaxis.set_major_locator(MultipleLocator(1)) # Opcional: Marcas cada 1 grado para perturbación
 
     # 2. Gráfico de Respuesta del Sistema (Temperatura)
     axs[1].plot(time, simulation_data['Temperature (°C)'], label='Temperatura del Ambiente', color='darkgreen')
@@ -26,6 +30,7 @@ def create_and_save_plots(simulation_data: pd.DataFrame, params: dict, simulatio
     axs[1].set_title('Respuesta del Sistema')
     axs[1].grid(True)
     axs[1].legend()
+    axs[1].yaxis.set_major_locator(MultipleLocator(0.5)) # <--- 2. AÑADIR ESTA LÍNEA (LA SOLUCIÓN)
 
     # 3. Gráfico de la Señal de Error
     axs[2].plot(time, simulation_data['Error (°C)'], label='Señal de Error (e = T_amb - T_obj)', color='crimson')
@@ -34,6 +39,7 @@ def create_and_save_plots(simulation_data: pd.DataFrame, params: dict, simulatio
     axs[2].set_title('Señal de Error')
     axs[2].grid(True)
     axs[2].legend()
+    axs[2].yaxis.set_major_locator(MultipleLocator(0.5)) # <--- 3. AÑADIR ESTA LÍNEA TAMBIÉN
 
     # 4. Gráfico de la Acción de Control
     axs[3].plot(time, simulation_data['Compressor State'], label='Estado del Compresor', color='dodgerblue', drawstyle='steps-post')
