@@ -1,268 +1,55 @@
 import streamlit as st
-import numpy as np
-import pandas as pd
-from results_handler import create_temperature_plot, save_simulation_results
-from disturbance_handler import generate_random_disturbance_with_params
-import matplotlib.pyplot as plt
-import random
 from ui_parameters import get_simulation_parameters_ui
+from simulation_logic import run_simulation # Importamos la función principal
+from results_handler import create_simulation_directory, save_simulation_data, save_summary
+from plotting_handler import create_and_save_plots
 
-st.set_page_config(page_title='Simulación de Control de Temperatura', page_icon='🌡️', layout='centered')
-st.markdown('<h1 style="font-size:2.1rem; white-space:nowrap; color:#fff; margin-bottom:0.2em;">🌡️ Simulación de Control de Temperatura</h1>', unsafe_allow_html=True)
-st.markdown('''<style>body {background-color: #f8f9fa;} .stButton>button {background-color: #006400; color: white; font-size: 1.2em; border-radius: 8px;} .block-container {padding-top: 1.5rem;} </style>''', unsafe_allow_html=True)
+# --- Configuración de la página ---
+st.set_page_config(page_title='Simulación de Control de Temperatura', page_icon='🌡️', layout='wide')
+st.title('🌡️ Simulación y Análisis de Sistema de Control de Temperatura')
 
-# Inicializa variables de estado de Streamlit para controlar si la simulación ya se ejecutó y para guardar el último gráfico generado
+# --- Estado de la Sesión ---
 if 'sim_done' not in st.session_state:
     st.session_state.sim_done = False
 if 'last_fig' not in st.session_state:
     st.session_state.last_fig = None
-
-def init_random_simulation_state(params):
-    min_temp = params['min_temp']
-    max_temp = params['max_temp']
-    prob = params['prob']
-    permitir_fallas = params['permitir_fallas']
-    duration = params['duration']
-    target = params['target']
-    initial = params['initial']
-    if permitir_fallas:
-        duracion_min = 1
-        duracion_max = 6
-    else:
-        duracion_min = 1
-        duracion_max = 3
-    return {
-        'min_temp': min_temp,
-        'max_temp': max_temp,
-        'prob': prob,
-        'permitir_fallas': permitir_fallas,
-        'duration': duration,
-        'target': target,
-        'initial': initial,
-        'duracion_min': duracion_min,
-        'duracion_max': duracion_max,
-        'hysteresis': 0.5,
-        'cooling_power': 0.2,
-        'current_temperature': initial,
-        'temperature_history': [initial],
-        'time_points': [0],
-        'duration_int': int(duration),
-        'perturbacion_activa': False,
-        'duracion_restante': 0,
-        'intensidad_perturbacion': 0.0,
-        'minutos_en_perturbacion_larga': 0,
-        'corte_por_falla': False,
-        'minuto_falla': None,
-        'duracion_perturbacion_actual': 0,
-        'temperatura_meseta': None
-    }
-
-def run_random_simulation(params):
-    state = init_random_simulation_state(params)
-    for current_time in range(1, state['duration_int'] + 1):
-        if state['perturbacion_activa']:
-            state['current_temperature'] = state['temperatura_meseta']
-            state['duracion_restante'] -= 1
-            if state['duracion_perturbacion_actual'] > 3:
-                state['minutos_en_perturbacion_larga'] += 1
-                if state['minutos_en_perturbacion_larga'] >= 3:
-                    state['corte_por_falla'] = True
-                    state['minuto_falla'] = current_time
-                    break
-            else:
-                state['minutos_en_perturbacion_larga'] = 0
-            compressor_on = False
-            state['temperature_history'].append(state['current_temperature'])
-            state['time_points'].append(current_time)
-            if state['duracion_restante'] == 0:
-                state['perturbacion_activa'] = False
-                state['minutos_en_perturbacion_larga'] = 0
-                state['temperatura_meseta'] = None
-            continue
-        # Si no hay perturbación activa, puede generarse una nueva
-        disturbance = generate_random_disturbance_with_params({'probability': state['prob'], 'min_temp': state['min_temp'], 'max_temp': state['max_temp']})
-        if disturbance is not None:
-            # Definir duración aleatoria según el rango
-            duracion = random.randint(state['duracion_min'], state['duracion_max'])
-            state['perturbacion_activa'] = True
-            state['duracion_restante'] = duracion
-            state['duracion_perturbacion_actual'] = duracion
-            state['intensidad_perturbacion'] = disturbance
-            state['temperatura_meseta'] = state['current_temperature'] + state['intensidad_perturbacion']
-            state['minutos_en_perturbacion_larga'] = 1 if duracion > 3 else 0
-            state['current_temperature'] = state['temperatura_meseta']
-            compressor_on = False
-            state['temperature_history'].append(state['current_temperature'])
-            state['time_points'].append(current_time)
-            if duracion > 3 and state['minutos_en_perturbacion_larga'] >= 3:
-                state['corte_por_falla'] = True
-                state['minuto_falla'] = current_time
-                break
-            state['duracion_restante'] -= 1
-            if state['duracion_restante'] == 0:
-                state['perturbacion_activa'] = False
-                state['minutos_en_perturbacion_larga'] = 0
-                state['temperatura_meseta'] = None
-            continue
-        # Si no hay perturbación, control normal
-        if current_time == 1:
-            compressor_on = False
-        if not compressor_on and state['current_temperature'] >= state['target'] + state['hysteresis']:
-            compressor_on = True
-        elif compressor_on and state['current_temperature'] <= state['target'] - state['hysteresis']:
-            compressor_on = False
-        if compressor_on:
-            state['current_temperature'] -= state['cooling_power']
-        state['temperature_history'].append(state['current_temperature'])
-        state['time_points'].append(current_time)
-    return {
-        'temperature_history': state['temperature_history'],
-        'time_points': state['time_points'],
-        'corte_por_falla': state['corte_por_falla'],
-        'minuto_falla': state['minuto_falla']
-    }
-
-def run_custom_simulation(params):
-    custom_events = params['custom_events']
-    duration = params['duration']
-    target = params['target']
-    initial = params['initial']
-    hysteresis = 0.5
-    cooling_power = 0.2
-    current_temperature = initial
-    temperature_history = [current_temperature]
-    time_points = [0]
-    duration_int = int(duration)
-    plateau = [None] * (duration_int + 1)
-    for event in custom_events:
-        start = int(event['start'])
-        end = min(int(event['start']) + int(event['duration']), duration_int)
-        for t in range(start, end):
-            plateau[t] = target + event['intensity']
-    corte_por_falla = False
-    minuto_falla = None
-    perturbacion_larga_activa = None
-    minutos_en_perturbacion_larga = 0
-    temperatura_meseta = None
-    duracion_meseta = 0
-    minutos_en_esta_perturbacion = 0
-    for current_time in range(1, duration_int + 1):
-        # Verificar si hay una perturbación activa (de cualquier duración)
-        perturbacion_activa = None
-        for event in custom_events:
-            start = int(event['start'])
-            end = min(int(event['start']) + int(event['duration']), duration_int)
-            if start <= current_time < end:
-                perturbacion_activa = event
-                break
-        if perturbacion_activa:
-            if duracion_meseta == 0:
-                temperatura_meseta = current_temperature + perturbacion_activa['intensity']
-                duracion_meseta = int(perturbacion_activa['duration'])
-                minutos_en_esta_perturbacion = 1
-            else:
-                minutos_en_esta_perturbacion += 1
-            current_temperature = temperatura_meseta
-            compressor_on = False
-            temperature_history.append(current_temperature)
-            time_points.append(current_time)
-            # Lógica de corte por falla si la perturbación es larga
-            if duracion_meseta + minutos_en_esta_perturbacion - 1 > 3 and minutos_en_esta_perturbacion > 3:
-                corte_por_falla = True
-                minuto_falla = current_time
-                break
-            duracion_meseta -= 1
-            if duracion_meseta == 0:
-                temperatura_meseta = None
-                minutos_en_esta_perturbacion = 0
-            continue
-        else:
-            temperatura_meseta = None
-            duracion_meseta = 0
-            minutos_en_esta_perturbacion = 0
-        if plateau[current_time] is not None:
-            # (Ya cubierto por la lógica anterior)
-            pass
-        else:
-            if current_time == 1:
-                compressor_on = False
-            if not compressor_on and current_temperature >= target + hysteresis:
-                compressor_on = True
-            elif compressor_on and current_temperature <= target - hysteresis:
-                compressor_on = False
-            if compressor_on:
-                current_temperature -= cooling_power
-        temperature_history.append(current_temperature)
-        time_points.append(current_time)
-    return {
-        'temperature_history': temperature_history,
-        'time_points': time_points,
-        'corte_por_falla': corte_por_falla,
-        'minuto_falla': minuto_falla
-    }
-
-def show_simulation_results(temperature_history, time_points, target, corte_por_falla, minuto_falla, modo):
-    save_simulation_results(temperature_history, time_points, target, len(time_points)-1)
-    simulation_data = pd.DataFrame({'Time (min)': time_points, 'Temperature (°C)': temperature_history})
-    fig = create_temperature_plot(simulation_data, target)
-    st.session_state.last_fig = fig
-    st.session_state.sim_done = True
-    st.pyplot(fig)
-    if corte_por_falla:
-        if modo == 'Aleatorio':
-            st.error(f'Falla: Se detectó una perturbación aleatoria con duración mayor a 3 minutos en el minuto {minuto_falla}. Ejecución abortada.')
-        else:
-            st.error(f'Falla: Se detectó una perturbación con duración mayor a 3 minutos en el minuto {minuto_falla}. Ejecución abortada.')
-    else:
-        st.success('¡Simulación finalizada! Los resultados se guardaron en la carpeta simulation_results.')
-    if st.button('Nueva simulación'):
-        reset_simulation()
-
-def validate_parameters(mode, min_temp, max_temp, target, initial):
-    if mode == 'Aleatorio' and min_temp > max_temp:
-        st.error('La perturbación mínima no puede ser mayor que la máxima.')
-        return False
-    if not (17 <= target <= 30 and 17 <= initial <= 30):
-        st.error('Las temperaturas deben estar entre 17 y 30 °C.')
-        return False
-    return True
+if 'results_dir' not in st.session_state:
+    st.session_state.results_dir = ""
 
 def reset_simulation():
+    """Reinicia el estado para una nueva simulación."""
     st.session_state.sim_done = False
     st.session_state.last_fig = None
+    st.session_state.results_dir = ""
+    if 'custom_events' in st.session_state:
+        del st.session_state['custom_events']
     st.rerun()
 
+# --- Flujo Principal de la App ---
 if not st.session_state.sim_done:
     params = get_simulation_parameters_ui()
-    mode = params['mode']
-    permitir_fallas = params['permitir_fallas']
-    duration = params['duration']
-    prob = params['prob']
-    min_temp = params['min_temp']
-    max_temp = params['max_temp']
-    target = params['target']
-    initial = params['initial']
-    custom_events = params['custom_events']
-    with st.form('sim_form'):
-        submitted = st.form_submit_button('Iniciar Simulación')
+    
+    if st.button('Iniciar Simulación', key='start_button'):
+        with st.spinner('Ejecutando simulación y generando análisis...'):
+            # 1. Ejecutar la lógica de la simulación para cualquier modo
+            results_df, sim_status = run_simulation(params)
 
-    if submitted:
-        if mode == 'Aleatorio':
-            if not validate_parameters(mode, min_temp, max_temp, target, initial):
-                pass
-            else:
-                st.success('Simulación en curso...')
-                sim_result = run_random_simulation(params)
-                show_simulation_results(sim_result['temperature_history'], sim_result['time_points'], target, sim_result['corte_por_falla'], sim_result['minuto_falla'], mode)
-        else:
-            if not validate_parameters(mode, min_temp, max_temp, target, initial):
-                pass
-            else:
-                st.success('Simulación en curso...')
-                sim_result = run_custom_simulation(params)
-                show_simulation_results(sim_result['temperature_history'], sim_result['time_points'], target, sim_result['corte_por_falla'], sim_result['minuto_falla'], mode)
+            # 2. Guardar resultados
+            simulation_dir = create_simulation_directory()
+            save_simulation_data(simulation_dir, results_df)
+            save_summary(simulation_dir, results_df, params)
+
+            # 3. Generar y guardar los gráficos de análisis
+            fig, plot_path = create_and_save_plots(results_df, params, simulation_dir)
+
+            # 4. Actualizar el estado de la sesión para mostrar los resultados
+            st.session_state.sim_done = True
+            st.session_state.last_fig = fig
+            st.session_state.results_dir = simulation_dir
+            st.rerun()
 else:
+    st.success(f"¡Simulación finalizada! Los resultados se guardaron en: `{st.session_state.results_dir}`")
     st.pyplot(st.session_state.last_fig)
-    st.success('¡Simulación finalizada! Los resultados se guardaron en la carpeta simulation_results.')
-    if st.button('Nueva simulación'):
-        reset_simulation() 
+    
+    if st.button('Realizar una Nueva Simulación'):
+        reset_simulation()
